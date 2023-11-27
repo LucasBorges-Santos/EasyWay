@@ -61,6 +61,11 @@ function make_point_action(self, e){
     select_marker(marker);
     return marker
 };
+
+function create_marker(latitude, longitude){
+    return new Marker(latitude, longitude)
+};
+
 make_point_action.on = false
 make_point_action.off = false
 // ======================================================================================
@@ -94,14 +99,14 @@ class Line {
             } else {
                 self.initial_marker = new Marker(param.latlng.lat, param.latlng.lng);
             }
-            select_marker(self.initial_marker);
+            // select_marker(self.initial_marker);
         } else if(!self.final_marker){
             if(param instanceof Marker){
                 self.final_marker = param;
             } else {
                 self.final_marker = new Marker(param.latlng.lat, param.latlng.lng);
             }
-            select_marker(self.final_marker);
+            // select_marker(self.final_marker);
         }
         if(self.final_marker){
             self.update_polyline(self)

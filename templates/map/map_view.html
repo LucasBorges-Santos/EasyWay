@@ -1,0 +1,198 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script
+      src="https://code.jquery.com/jquery-3.6.0.min.js"
+      integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4="
+      crossorigin="anonymous"
+    ></script>
+    <title>Hello, world!</title>
+
+    <meta charset="UTF-8">
+  </head>
+  <body>
+    <div class="container">
+        <div class"row">
+            <div id="status_location_error" class="alert alert-danger" role="alert">
+                Não conseguimos acessar sua localização :(
+            </div>
+            <div id="status_location_success" class="alert alert-success" role="alert">
+                Conseguimos acessar sua localização :)
+            </div>
+        </div>
+        <div class="row">
+            <div id="menu" class="col-12">
+                <div class="input-group mb-3">
+                    <div class="input-group mb-3">
+                        <div class="input-group-prepend">
+                          <button id="buscar_rota" class="btn btn-outline-secondary" disabled type="button">Buscar</button>
+                        </div>
+                        <select class="custom-select" disabled id="destino">
+                            <option disabled hidden value="-1" selected>Selecione o Destino</option>
+                          {% for option in select_filter %}
+                            <option>{{ option }}</option>
+                        {% endfor %}
+                        </select>
+                    </div>
+                </div>                
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-12">
+                <div id="map" style="height: 800px;"></div>
+            </div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.12.9/dist/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+
+    <script src="{% static 'js/map_constructor/Objects Construct.js' %}"></script>
+    <script>
+        // ====================================================================
+        // Initialize the map
+        // ====================================================================
+        var map = L.map('map', {
+            center: [-23.669874, -46.699830],
+            zoom: 25
+        });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+        }).addTo(map);
+        $("#map").attr("data-active-function", "false")
+
+        // ====================================================================
+        // user location Functions
+        // ====================================================================
+        // ====================================================================
+        var user_location = false;
+        var user_geolocation_marker = false;
+        $("#status_location_error").hide();
+        $("#status_location_success").hide();
+        map.locate({setView: true, watch: true}) /* This will return map so you can do chaining */
+        .on('locationfound', function(e){
+            var marker = L.marker([e.latitude, e.longitude]);
+            // var circle = L.circle([e.latitude, e.longitude], e.accuracy/2, {
+            //     weight: 1,
+            //     color: 'blue',
+            //     fillColor: '#cacaca',
+            //     fillOpacity: 0.2
+            // });
+            map.addLayer(marker);
+            user_geolocation_marker = marker;
+            user_geolocation_marker.user_marker = true;
+            $(marker._icon).css('filter', 'hue-rotate(280deg)')
+            $("#status_location_success").show();
+            $("#menu :disabled").prop("disabled", false);
+            user_location = true
+        })
+       .on('locationerror', function(e){
+            $("#status_location_error").show();
+            user_location = false
+        });
+
+        // ====================================================================
+        // search route Functions
+        // ====================================================================
+        // ====================================================================
+        var latitude = 0;
+        var longitude = 0;
+
+        $("#buscar_rota").click(function(){
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        destino = $("#destino")[0].value;
+                        latitude = position.coords.latitude;
+                        longitude = position.coords.longitude;
+                        let url = "/routes/get_route/" + latitude + "/" + longitude + "/" + destino
+                        $.ajax({
+                            url: url,
+                            type: "GET",
+                            dataType: "json",
+                            success: function(response) {
+                                console.log(response);
+                                route = response;
+                                let last_marker = false;
+                                
+                                var polylinesAndMarkers = [];
+                                var allLayers = map._layers;
+
+                                for (var layerId in allLayers) {
+                                    var layer = allLayers[layerId];
+                                
+                                    if (layer instanceof L.Polyline || layer instanceof L.Marker) {
+                                        map. removeLayer(layer);
+                                    }
+                                }                             
+                                var latitude_last = 0;
+                                var longitude_last = 0;
+
+                                route["melhor_caminho"].forEach(function(ponto) {
+                                    coordenadas = route["routes"][ponto];
+                                    let partes = coordenadas.split(',');
+                                    var latitude_p = parseFloat(partes[0]);
+                                    var longitude_p = parseFloat(partes[1]);
+                                    let current_point_created = create_marker(latitude_p, longitude_p);
+                                    
+                                    if(!last_marker){
+                                        last_marker = create_marker(latitude, longitude);;
+                                    }
+                                    
+                                    let line = new Line();
+                                    line.make_line(line, last_marker);
+                                    line.make_line(line, current_point_created);
+
+                                    latitude_last = latitude_p;
+                                    longitude_last = longitude_p;
+
+                                    last_marker = current_point_created;
+                                });
+
+                                let first = false
+                                for (var layerId in allLayers) {
+                                    var layer = allLayers[layerId];
+                                
+                                    if (layer instanceof L.Marker) {
+                                        console.log(layer);
+                                        map.removeLayer(layer);
+                                    
+                                    }
+                                }   
+                                var marker = L.marker([latitude, longitude]);
+                                map.addLayer(marker);
+                                user_geolocation_marker = marker;
+                                $(marker._icon).css('filter', 'hue-rotate(280deg)')
+
+                                var marker = L.marker([latitude_last, longitude_last]);
+                                map.addLayer(marker);
+                                $(marker._icon).css('filter', 'hue-rotate(280deg)')
+                            },
+                            error: function(error) {
+                                console.error("Erro ao procurar caminho:", error);
+                                route = false;
+                            }
+                        });
+
+                    },
+                    function(error) {
+                        console.error("Erro ao obter localização:", error.message);
+                    }
+                );
+            } else {
+                console.error("Geolocalização não suportada neste navegador.");
+            }
+        });
+    </script>
+    <!-- Optional JavaScript -->
+    <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+  </body>
+</html>
