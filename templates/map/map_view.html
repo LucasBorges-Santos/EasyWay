@@ -73,122 +73,170 @@
         // user location Functions
         // ====================================================================
         // ====================================================================
-        var user_location = false;
-        var user_geolocation_marker = false;
         $("#status_location_error").hide();
         $("#status_location_success").hide();
-        map.locate({setView: true, watch: true}) /* This will return map so you can do chaining */
-        .on('locationfound', function(e){
-            var marker = L.marker([e.latitude, e.longitude]);
-            // var circle = L.circle([e.latitude, e.longitude], e.accuracy/2, {
-            //     weight: 1,
-            //     color: 'blue',
-            //     fillColor: '#cacaca',
-            //     fillOpacity: 0.2
-            // });
-            map.addLayer(marker);
-            user_geolocation_marker = marker;
-            user_geolocation_marker.user_marker = true;
-            $(marker._icon).css('filter', 'hue-rotate(280deg)')
-            $("#status_location_success").show();
-            $("#menu :disabled").prop("disabled", false);
-            user_location = true
-        })
-       .on('locationerror', function(e){
-            $("#status_location_error").show();
-            user_location = false
-        });
+        user_geolocation_marker = false
+        
+        function criar_marker(){
+            if(user_geolocation_marker){
+                map.removeLayer(user_geolocation_marker[0]);
+                map.removeLayer(user_geolocation_marker[1]);
+            }
+            user_geolocation_marker = [
+                L.circle([0, 0], 5, {
+                    weight: 1,
+                    color: '#E08602',
+                    fillColor: '#E08602',
+                    fillOpacity: 0.1
+                }), 
+                L.circle([0, 0], 2, {
+                    weight: 1,
+                    color: '#0D2596',
+                    fillColor: '#004CFF',
+                    fillOpacity: 1
+                })
+            ]
+            map.addLayer(user_geolocation_marker[0]);
+            map.addLayer(user_geolocation_marker[1]);
+        }
+        criar_marker()
+        
+        // rota atual buscada
+        var route = false;
+        var u_latitude = false;
+        var u_longitude = false;
+        
+        // ====================================================================
+        // construção das rotas encontradas
+        // ====================================================================
+        // ====================================================================
+
+        function remove_lines(){
+            let polylinesAndMarkers = [];
+            let allLayers = map._layers;
+            for (var layerId in allLayers) {
+                var layer = allLayers[layerId];
+                if (layer instanceof L.Polyline) {
+                    map.removeLayer(layer);
+                }
+            }   
+        };
+
+        function remove_markers(){
+            let polylinesAndMarkers = [];
+            let allLayers = map._layers;
+            for (var layerId in allLayers) {
+                var layer = allLayers[layerId];
+                if (layer instanceof L.Marker) {
+                    map.removeLayer(layer);
+                }
+            }   
+        };
+
+        function success_get_route(response){
+            route = response;
+            
+            remove_markers();
+            remove_lines();
+            
+            let last_marker = create_marker(u_latitude, u_longitude);
+
+            var latitude_last = 0;
+            var longitude_last = 0;
+            
+            response["melhor_caminho"].forEach(function(ponto) {
+                coordenadas = response["routes"][ponto];
+                let partes = coordenadas.split(',');
+
+                let current_point_created = create_marker(
+                    parseFloat(partes[0]), 
+                    parseFloat(partes[1])
+                );
+
+                let line = new Line();
+                
+                line.make_line(line, last_marker);
+                line.make_line(line, current_point_created);
+                
+                latitude_last = parseFloat(partes[0]);
+                longitude_last = parseFloat(partes[1]);
+
+                last_marker = current_point_created;
+            });
+            remove_markers();
+            last_marker = create_marker(last_marker.lat, last_marker.lng);
+            $(last_marker.marker._icon).css('filter', 'hue-rotate(150deg)')
+
+            criar_marker()
+            user_location()
+        }
 
         // ====================================================================
         // search route Functions
         // ====================================================================
         // ====================================================================
-        var latitude = 0;
-        var longitude = 0;
+
+        function get_route(destino){
+            let url = "/routes/get_route/" + u_latitude + "/" + u_longitude + "/" + destino
+            $.ajax({
+                url: url,
+                type: "GET",
+                dataType: "json",
+                success: function(response){
+                    success_get_route(response)
+                    routes = response
+                },
+                error: function(error) {
+                    console.error("Erro ao procurar caminho:", error);
+                    route = false;
+                }
+            });
+        }
+
+        function user_location(){
+            navigator.geolocation.watchPosition(
+                function(position) {
+                    u_latitude = position.coords.latitude;
+                    u_longitude = position.coords.longitude;
+                    
+                    user_geolocation_marker[0].setLatLng([u_latitude, u_longitude]);
+                    user_geolocation_marker[1].setLatLng([u_latitude, u_longitude]);
+                    
+                    console.log([u_latitude, u_longitude]);
+
+                    $("#status_location_success").show();
+                    $("#menu :disabled").prop("disabled", false);
+
+                    // if(route){
+                    //     success_get_route(route)
+                    // }
+                },
+                function(error) {
+                    $("#status_location_error").show();
+                    console.log(e);
+                },
+                {
+                    enableHighAccuracy: true,
+                    maximumAge: 0
+                }
+            );
+        };
 
         $("#buscar_rota").click(function(){
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    function(position) {
-                        destino = $("#destino")[0].value;
-                        latitude = position.coords.latitude;
-                        longitude = position.coords.longitude;
-                        let url = "/routes/get_route/" + latitude + "/" + longitude + "/" + destino
-                        $.ajax({
-                            url: url,
-                            type: "GET",
-                            dataType: "json",
-                            success: function(response) {
-                                console.log(response);
-                                route = response;
-                                let last_marker = false;
-                                
-                                var polylinesAndMarkers = [];
-                                var allLayers = map._layers;
+            route = true
+         });
 
-                                for (var layerId in allLayers) {
-                                    var layer = allLayers[layerId];
-                                
-                                    if (layer instanceof L.Polyline || layer instanceof L.Marker) {
-                                        map. removeLayer(layer);
-                                    }
-                                }                             
-                                var latitude_last = 0;
-                                var longitude_last = 0;
-
-                                route["melhor_caminho"].forEach(function(ponto) {
-                                    coordenadas = route["routes"][ponto];
-                                    let partes = coordenadas.split(',');
-                                    var latitude_p = parseFloat(partes[0]);
-                                    var longitude_p = parseFloat(partes[1]);
-                                    let current_point_created = create_marker(latitude_p, longitude_p);
-                                    
-                                    if(!last_marker){
-                                        last_marker = create_marker(latitude, longitude);;
-                                    }
-                                    
-                                    let line = new Line();
-                                    line.make_line(line, last_marker);
-                                    line.make_line(line, current_point_created);
-
-                                    latitude_last = latitude_p;
-                                    longitude_last = longitude_p;
-
-                                    last_marker = current_point_created;
-                                });
-
-                                let first = false
-                                for (var layerId in allLayers) {
-                                    var layer = allLayers[layerId];
-                                
-                                    if (layer instanceof L.Marker) {
-                                        console.log(layer);
-                                        map.removeLayer(layer);
-                                    
-                                    }
-                                }   
-                                var marker = L.marker([latitude, longitude]);
-                                map.addLayer(marker);
-                                user_geolocation_marker = marker;
-                                $(marker._icon).css('filter', 'hue-rotate(280deg)')
-
-                                var marker = L.marker([latitude_last, longitude_last]);
-                                map.addLayer(marker);
-                                $(marker._icon).css('filter', 'hue-rotate(280deg)')
-                            },
-                            error: function(error) {
-                                console.error("Erro ao procurar caminho:", error);
-                                route = false;
-                            }
-                        });
-
-                    },
-                    function(error) {
-                        console.error("Erro ao obter localização:", error.message);
-                    }
-                );
-            } else {
-                console.error("Geolocalização não suportada neste navegador.");
+        user_location()
+        setInterval(user_location, 1000);
+        // ====================================================================
+        // search route Functions
+        // ====================================================================
+        // ====================================================================
+        
+        $("#buscar_rota").click(function(){
+            let destino = $("#destino")[0].value;
+            if(destino){
+                get_route(destino)
             }
         });
     </script>

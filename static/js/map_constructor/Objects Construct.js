@@ -73,7 +73,7 @@ make_point_action.off = false
 // ** map need exist in this scope
 // ======================================================================================
 class Line {
-    constructor(color='red') {
+    constructor(color='blue') {
         this.color = color;
         this.polyline = false;
         this.initial_marker = false;
@@ -119,7 +119,11 @@ class Line {
                 this.final_marker.get_coords(),
                 this.initial_marker.get_coords()
             ], 
-            {color:this.color}
+            {
+                color: '#33A9DD', 
+                opacity: 1,
+                weight: 10   
+            }
         ).addTo(map);
     };
 };   
